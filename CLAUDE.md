@@ -68,19 +68,41 @@ Background genes remain independent, unchanged.
 
 **Validated result (current params, seed 42):** realized within-module correlation
 (measured on size-factor-normalized expression, Group1 cells only, to strip the
-technical correlation floor — see below) ≈ 0.58-0.62 across all 4 modules vs. target
-0.6; background ≈ 0.001. Test accuracy 80.5% (train 93.4%) — in the target zone.
-**L1 recovers only 12-24% of each disease module's 25 genes** (M1: 24%, M2: 12%,
-M3: 16%) and **0% of the distractor module** — this is the empirical evidence the
-thesis rests on: L1 doesn't recover whole correlated modules, and it isn't fooled
-by correlation alone (only genuinely group-differential modules get nonzero
-coefficients).
+technical size-factor floor — see gotchas below) ≈ 0.58-0.63 across disease modules
+and the distractor module vs. target 0.6; background ≈ 0.20 (see "patient-effect
+floor" gotcha below — this is expected, not leakage). Test accuracy 80.5% (train
+93.4%) — in the target zone. **L1 recovers only 12-24% of each disease module's 25
+genes** (M1: 24%, M2: 12%, M3: 20%) and **0% of the distractor module** — this is
+the empirical evidence the thesis rests on: L1 doesn't recover whole correlated
+modules, and it isn't fooled by correlation alone (only genuinely group-differential
+modules get nonzero coefficients) — notably, this holds even though background and
+distractor genes now carry real, non-trivial correlation (~0.2-0.63) from the
+patient-effect floor, not just synthetic near-zero noise.
 
-**Important gotcha:** raw expression counts have a ~0.5 average pairwise
-correlation between essentially ALL genes (signal or background), because
-`size_factor` multiplies every gene's mean within a cell — a technical/sequencing-
-depth effect, not module structure. Always normalize by `size_factor` (CPM-style)
-before measuring correlation to see the real module-specific signal.
+**Gotcha #1 — technical (size_factor) correlation floor:** raw expression counts
+have a ~0.5 average pairwise correlation between essentially ALL genes (signal or
+background), because `size_factor` multiplies every gene's mean within a cell — a
+technical/sequencing-depth effect, not module structure. Always normalize by
+`size_factor` (CPM-style) before measuring correlation to see the real
+module-specific signal.
+
+**Gotcha #2 — patient-effect correlation floor (added when `gamma_i` went onto
+every gene):** `gamma_i` (the patient random effect) is applied additively to
+*every* gene's mean in Step 8 — disease-module, distractor-module, and background
+alike — since it represents a genuine patient-level effect that should shift all of
+a patient's expression together, not just disease genes. Because `gamma_i` is
+constant across all of a patient's cells, it survives the size_factor
+normalization above and induces a real, nonzero correlation floor among ALL genes,
+including background (~0.20 currently, exact value is a function of
+`mu_background`/`sigma2`/`dispersion` together — read it fresh from
+`background_corr` in the notebook, don't hand-copy a number into permanent docs).
+**Read the distractor-vs-background contrast as "distractor sits meaningfully above
+the shared floor (from the module copula); background sits at the floor" — not
+"zero vs. correlated."** A `mu = max(mu, 1e-6)` floor guards against the additive
+`gamma_i` form pushing a gene's mean non-positive for extreme draws (doesn't
+trigger under current `sigma2`, but protects future larger-`sigma2` sweeps). Also
+worth remembering for later: any future model that adds a patient covariate/random
+effect will now soak up variance from every gene, not just disease genes.
 
 ## Parameter tuning notes (from experimentation)
 - With the flat (pre-module) design: `fold_change=3, dispersion=15, sigma2=0.20,
