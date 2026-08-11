@@ -69,8 +69,13 @@ one they want worked on.
   internal refactor (named constants, assertions, PIT QQ plot, etc.) predates and
   is separate from the later "refactor with comments" work described below.
 - **`flat_syntheticdata.ipynb`** — no correlated modules, no subtypes. 100
-  independent signal genes vs. 900 background. Has the TOC/header refactor AND
-  the 10-method Baseline Methods section (see below). Generative params
+  independent signal genes vs. 900 background. Has the TOC/header refactor.
+  **As of 2026-07-30, this notebook is data-generation only** — the 10-method
+  Baseline Methods section that used to live at the end of it was removed and
+  moved into `baseline_methods_combined.ipynb` (see below and "Baseline Methods
+  suite"). It now ends with a "Step 12: readiness check for `%run`" cell that
+  asserts `counts_df`/`genes_df`/`patients_df`/`cells_df` exist and look
+  well-formed, for whatever `%run`s it next. Generative params
   (`fold_change=3, dispersion=15, sigma2=0.20`) were manually updated by the user
   at some point to match the other two data notebooks, resolving an earlier
   parameter-mismatch concern (previously `fold_change=4, dispersion=50,
@@ -78,8 +83,10 @@ one they want worked on.
   the other two, confounding cross-dataset comparisons).
 - **`correlated_syntheticData.ipynb`** — note the **capital D** in "Data," this is
   the actual filename, not a typo. 4 gene modules (3 disease + 1 distractor), no
-  subtypes. Has the TOC/header refactor AND the 10-method Baseline Methods
-  section. Also has three untouched user-authored markdown cells at the very top
+  subtypes. Has the TOC/header refactor. **As of 2026-07-30, data-generation only**
+  (same restructuring as flat — Baseline Methods section removed, moved to
+  `baseline_methods_combined.ipynb`, ends with the same readiness-check cell).
+  Also has three untouched user-authored markdown cells at the very top
   (Date, Literature Review with 2 paper links, "Key bugs and their solutions") —
   **do not edit these**, the user explicitly asked they be preserved as-is.
   **Filesystem gotcha:** macOS/APFS is case-insensitive-but-case-preserving, so
@@ -89,19 +96,37 @@ one they want worked on.
   double check you're not creating an accidental case-only duplicate before writing
   a new file whose name differs from an existing one only by case.
 - **`correlated_with_subtypes_syntheticdata.ipynb`** — 4 gene modules + per-patient
-  disease subtypes. Has the TOC/header refactor AND the 10-method Baseline Methods
-  section. This is thematically the closest sibling to `edits_syntheticdata.ipynb`
+  disease subtypes. Has the TOC/header refactor. **As of 2026-07-30,
+  data-generation only** (same restructuring — Baseline Methods section removed,
+  moved to `baseline_methods_combined.ipynb`, ends with the same readiness-check
+  cell). This is thematically the closest sibling to `edits_syntheticdata.ipynb`
   but is a **separately maintained, diverged copy** — changes to one do not
   propagate to the other.
-- **`baseline_methods_combined.ipynb`** — runs all three data notebooks (flat,
-  correlated, correlated+subtypes) sequentially in one notebook via `%run`, with a
-  `%reset -f` + CSV-checkpoint pattern between each so no dataset's leftover
-  variables (e.g. `module_names`, which only exists for two of the three) can leak
-  into the next one's analysis. Ends with a cross-dataset comparison (table + bar
-  charts) of all 10 methods' recovery rates across all three datasets. Has a
-  clearly-marked "Colab Setup" section (currently a no-op locally) and paired
-  local/Colab `%run` lines for when the user ports this into their actual Colab
-  project — see "Collaborative workflow" below.
+- **`baseline_methods_combined.ipynb`** — **as of 2026-07-30, this is where all 10
+  baseline methods' actual model code lives** (setup, training, evaluation) — it is
+  no longer just a thin `%run`-and-checkpoint wrapper around embedded baseline
+  sections in the data notebooks, since those sections were removed from the data
+  notebooks and moved here. Structure, top to bottom:
+  1. A pip-install cell (`!pip install -q numpy pandas scipy matplotlib seaborn
+     scikit-learn xgboost torch stg group-lasso`) — added because Colab's default
+     image lacks `stg` and `group-lasso`, which used to surface as a
+     `ModuleNotFoundError` partway through a Colab run. No-op locally (everything
+     already installed in `.venv`).
+  2. "Colab Setup" section (clone `disease-heterogeneity` using a `GITHUB_TOKEN`
+     Colab secret) — still a no-op locally, unchanged.
+  3. One big `## Dataset N: ...` section per dataset (flat, correlated,
+     correlated+subtypes), each containing, in order: a `%run` of that dataset's
+     data notebook (with the local line active and the Colab-path line commented
+     out, swap which is commented when porting to Colab) → a "Step 12: setup" cell
+     (builds `X_df`/train-test split, same as the old embedded setup cells used to)
+     → ten `### Method N: ...` mini-sections (one per baseline method) → a
+     "Step 23: full comparison" cell → a checkpoint cell that saves that dataset's
+     `baseline_df`/`module_recovery_df` to CSV → `%reset -f` to fully clear state
+     before the next dataset (prevents e.g. `module_names` leaking across
+     datasets).
+  4. A final "Combined comparison across all three datasets" section that reloads
+     the checkpoint CSVs and produces the cross-dataset comparison (table + bar
+     charts).
 
 ## Collaborative workflow (established 2026-07-29)
 The user develops/edits in **Google Colab**, connected to a collaborator's GitHub
@@ -140,11 +165,15 @@ user's own solo repo). The loop:
   this is already stubbed out (commented) in `baseline_methods_combined.ipynb`.
 
 ## Baseline Methods suite (10 methods, added 2026-07-29)
-Each of `flat_syntheticdata.ipynb`, `correlated_syntheticData.ipynb`, and
-`correlated_with_subtypes_syntheticdata.ipynb` ends with a "Baseline Methods"
-section (after a "Step 12: setup" cell that rebuilds `X_df`/train-test split from
-the data-generation section's `counts_df`/`genes_df`/`cells_df`). Methods, grouped
-by paradigm:
+All 10 methods' setup/training/evaluation code lives in
+`baseline_methods_combined.ipynb` (see "Repo file map" above for the exact
+structure) — one big section per dataset, each starting with a "Step 12: setup"
+cell that rebuilds `X_df`/train-test split from that dataset's `counts_df`/
+`genes_df`/`cells_df`, followed by a mini-section per method. **This moved out of
+the three data notebooks on 2026-07-30** — if you're looking at an older mental
+model (or an older commit) where the data notebooks each had their own embedded
+Baseline Methods section, that's stale; don't assume it without checking. Methods,
+grouped by paradigm:
 
 - **Embedded-linear**: L1 logistic regression (the original headline baseline),
   ElasticNet, Ridge, Group Lasso, L1-penalized linear SVM.
@@ -183,6 +212,55 @@ On the subtypes notebook, STG's behavior changed qualitatively under signal
 dilution (much less sparse, higher recovery, at the identical `lam` that gave very
 sparse/low-recovery behavior on the plain correlated notebook) — a real, reported
 finding, not something to average away.
+
+**IMPORTANT interpretation correction — do not conflate these two things when
+writing up or re-deriving "why baselines fail":**
+- **The distractor module's ~0% recovery across all 10 methods is NOT evidence of
+  failure.** M4 has zero true classification signal by design (it's a negative
+  control — just as correlated as a real module, but mean does not differ by
+  group). A supervised method correctly assigning it ~0% recovery is *correct,
+  expected behavior*, not a shortcoming to fix. This was stated as "failure
+  evidence" earlier in this project's analysis and that framing was wrong — it was
+  corrected once already; don't reintroduce it.
+- **The actual failure is under-recovery of the REAL disease modules (M1-M3) by
+  L1/STG/L1-SVM at their own self-chosen sparsity.** These methods correctly
+  determine a module matters, then arbitrarily keep only 3-6 of a module's 25
+  genes and drop the rest — that's the literal "picks 1-2 representative genes,
+  drops the rest" problem from this project's core problem statement, and it's a
+  real, measured result (not an artifact). This is the evidence methodology step 4
+  needs to beat, not the distractor-module numbers.
+
+**Budget-artifact follow-up test (SelectKBest-MI, tested 2026-07-30, not yet
+folded into any notebook):** the top-100 budget handed to Ridge/RF/XGBoost/RFE/
+SelectKBest-MI is itself a form of oracle knowledge (100 = the true number of
+signal-carrying genes, which you'd never know in a real dataset) — Ridge and
+Random Forest in particular have *no* sparsity mechanism at all without an
+external cutoff (L2 coefficients and Gini/gain importances are never exactly
+zero), so their "100% recovery" is entirely an artifact of the budget chosen for
+them, not evidence of understanding modules. To check whether SelectKBest-MI
+specifically has a legitimate non-oracle alternative, it was re-run with no fixed
+`k` at all: instead, a permutation-based significance threshold (shuffle the
+labels 100 times, take the 95th/99th percentile of the resulting null max-MI
+score across all 1000 genes — a standard max-statistic FWER-controlled test).
+Result, on **both** the correlated and correlated+subtypes datasets: it
+self-selected **75 genes** with **100% recovery on M1, M2, and M3, 0% on the
+distractor, and 0% background leak** — cleaner than the budgeted version (which
+leaked 8% distractor + 2.56% background because it was forced to fill 100 slots),
+and, notably, still 100% on M3 in the subtypes dataset (the module diluted to only
+3/10 Group1 patients, where L1 collapses to 0%). Mechanistic reason it survives
+dilution where L1 doesn't: MI scores each gene in total isolation, so it never
+competes against other genes for a shared sparsity budget the way L1's
+coefficients do — a rarer signal doesn't get crowded out. **Practical implication:
+SelectKBest-MI should NOT be grouped with Ridge/RF as "only works because of an
+oracle budget"** — unlike them, it has a real, standard, budget-free alternative
+and it holds up. RFE's non-oracle alternative would be RFECV (stops once
+cross-validated accuracy plateaus); this was *not* tested, but is predicted to
+collapse early and look more like L1's failure, since L1 already hits 93-99%
+accuracy using only 10-35 genes, well before all 75 true genes are needed for
+accuracy alone. Code and full output for the SelectKBest-MI test: standalone
+script (not a notebook cell) plus a write-up in `SelectKBest-MI_permutation_test.docx`
+in the repo root — **this file is not committed to git or tracked, ask the user
+if you need its content and it's not present.**
 
 **Per-notebook tuned hyperparameters** (retune if Step 2's generative params
 change): L1 `C` — flat 0.01, correlated 0.0054, subtypes 0.0068. STG `lam` — flat
@@ -325,6 +403,12 @@ difficulty the eventual group-aware method should help with.
 - Before creating any new file, check whether its name collides case-insensitively
   with an existing one (see the filesystem gotcha above) — `ls` the directory
   first if in doubt.
+- Each of the three data notebooks ends with a "Step 12: readiness check for
+  `%run`" cell (added 2026-07-30) — asserts `counts_df`/`genes_df`/`patients_df`/
+  `cells_df` exist and look well-formed (right columns, no NaNs, unique ids), with
+  conditional checks for `module_names`/`disease_modules` and `subtype` that only
+  fire on the notebooks where those exist. Identical cell content works unmodified
+  across all three notebooks — don't hand-write a different version per notebook.
 - Local Python environment: a `.venv/` in the repo root (gitignored), with
   `numpy pandas scipy matplotlib seaborn scikit-learn jupyter nbconvert stg torch
   xgboost group-lasso` installed. Verify any notebook change with a real
@@ -338,13 +422,34 @@ difficulty the eventual group-aware method should help with.
    whole point of the thesis and hasn't been started. Likely direction based on
    the framing above: a stochastic-gates-style architecture where gates are
    coupled/shared within a module (known or inferred) rather than independent
-   per-gene, trained jointly with the classifier. The 10-method baseline suite
-   (especially L1/STG's low recovery vs. Group Lasso's existing-but-crude
-   group-awareness) is the evidence this needs to beat.
+   per-gene, trained jointly with the classifier. The evidence this needs to beat
+   is L1/STG/L1-SVM's low *self-chosen-sparsity* recovery of the real disease
+   modules (M1-M3) — NOT the distractor module's 0% (see the "IMPORTANT
+   interpretation correction" note above, which flags a mistake already made once
+   in this project's own analysis — don't repeat it).
 2. Add the budget-asymmetry caveat (top-100 vs. self-chosen sparsity) to the
-   Baseline Methods comparison cells — noted above, not yet done.
+   Baseline Methods comparison cells — still not done in the notebook itself. The
+   SelectKBest-MI permutation-threshold variant (see above) has now been tested
+   standalone and could be folded into `baseline_methods_combined.ipynb` as an
+   eleventh method/variant if the user wants it there rather than just in the
+   separate `.docx` write-up.
 3. Decide what to do about `edits_syntheticdata.ipynb` vs.
    `correlated_with_subtypes_syntheticdata.ipynb` having diverged — ask the user
    rather than assuming one supersedes the other.
 4. Methodology step 5 (systematic parameter sweeps) and step 6 (real IPF/COPD/FHP
-   data validation) haven't been started at all.
+   data validation) haven't been started at all. One specific, well-motivated sweep
+   direction raised by the user (2026-07-30): raising `within_module_correlation`
+   (currently 0.6) rather than generically increasing noise/difficulty — the
+   reasoning being that higher intra-module correlation should make L1-style
+   "arbitrarily keep one representative gene" pruning worse, while ElasticNet/Group
+   Lasso (built to keep correlated genes together) should stay robust or improve,
+   sharpening the specific contrast the thesis is trying to show rather than just
+   making the task harder for everyone uniformly. Not yet run.
+5. **Secondary/adjacent scoping question, resolved 2026-07-30**: the bigger Yale
+   lab project integrates across cell types (research question 5); this smaller
+   thesis project's simulator has no cell-type dimension at all and, per user
+   decision, should NOT take on cell-type integration now — it would be a
+   substantial separate methodological addition (typed cells, per-cell-type
+   modules, a multi-view architecture) that would dilute focus away from step 4,
+   which hasn't been built yet. Treat as future work, not current scope, unless
+   the user revisits this.
