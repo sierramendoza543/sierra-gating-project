@@ -250,7 +250,7 @@ def generate_correlated_data(
 
         for module in module_names:
             base = disease_mu_base if module in disease_modules else mu_background
-            mu_gene = max(cell.size_factor * (base + gamma_i), MU_FLOOR)
+            mu_gene = cell.size_factor * max(base + gamma_i, MU_FLOOR)
             var = mu_gene + mu_gene**2 / dispersion
             p = mu_gene / var
             n = mu_gene * p / (1 - p)
@@ -269,7 +269,7 @@ def generate_correlated_data(
                 })
 
         for gene_id in background_gene_ids:
-            mu = max(cell.size_factor * (mu_background + gamma_i), MU_FLOOR)
+            mu = cell.size_factor * max(mu_background + gamma_i, MU_FLOOR)
             var = mu + mu**2 / dispersion
             p = mu / var
             n = mu * p / (1 - p)
